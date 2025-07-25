@@ -34,7 +34,7 @@ A browser extension that automatically likes Facebook posts. This extension help
 ## How It Works
 
 The extension scans your Facebook feed every few seconds and identifies "Like" buttons on posts. It uses smart detection to:
-- Only target posts (not comments)
+- target posts
 - Avoid liking the same post multiple times
 - Provide visual feedback when a post is liked
 
