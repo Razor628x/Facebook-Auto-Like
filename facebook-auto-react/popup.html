@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #startBtn {
+      background-color: #42b72a;
+      color: white;
+    }
+    #stopBtn {
+      background-color: #ff4d4d;
+      color: white;
+    }
+    #status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .running {
+      background-color: #e6f9e6;
+      color: #2e7d32;
+    }
+    .stopped {
+      background-color: #ffe6e6;
+      color: #c62828;
+    }
+    select {
+      padding: 8px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3>Facebook Auto React</h3>
+    
+    <label for="reactionType">Pilih Reaksi:</label>
+    <select id="reactionType">
+      <option value="like">Like</option>
+      <option value="love">Love</option>
+      <option value="haha">Haha</option>
+      <option value="wow">Wow</option>
+      <option value="sad">Sad</option>
+      <option value="angry">Angry</option>
+    </select>
+    
+    <div id="status" class="stopped">Status: Stopped</div>
+    
+    <button id="startBtn">Mulai</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "manifest_version": 2,
+  "name": "Facebook Auto React",
+  "version": "1.0",
+  "description": "Ekstensi untuk memberikan reaksi otomatis di Facebook",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Facebook Auto React"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.facebook.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
