@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const stopBtn = document.getElementById('stopBtn');
   const statusDiv = document.getElementById('status');
 
-  // Load saved settings (tetap menyimpan reactionType untuk kompatibilitas)
+  // Load saved settings
   browser.storage.local.get(['isRunning', 'reactionType']).then((result) => {
     if (result.isRunning) {
       statusDiv.textContent = 'Status: Running';
@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   startBtn.addEventListener('click', function() {
-    // Set default reaction to 'like'
     const selectedReaction = 'like';
     
     browser.storage.local.set({
@@ -25,11 +24,15 @@ document.addEventListener('DOMContentLoaded', function() {
       statusDiv.textContent = 'Status: Running';
       statusDiv.className = 'running';
       
-      // Kirim pesan ke content script
-      browser.tabs.query({active: true, currentWindow: true}).then((tabs) => {
-        browser.tabs.sendMessage(tabs[0].id, {
-          action: 'start',
-          reaction: selectedReaction
+      // Kirim pesan ke semua tab Facebook
+      browser.tabs.query({url: "*://*.facebook.com/*"}).then((tabs) => {
+        tabs.forEach(tab => {
+          browser.tabs.sendMessage(tab.id, {
+            action: 'start',
+            reaction: selectedReaction
+          }).catch(() => {
+            // Ignore errors for tabs where content script isn't loaded
+          });
         });
       });
     });
@@ -40,9 +43,13 @@ document.addEventListener('DOMContentLoaded', function() {
       statusDiv.textContent = 'Status: Stopped';
       statusDiv.className = 'stopped';
       
-      // Kirim pesan ke content script
-      browser.tabs.query({active: true, currentWindow: true}).then((tabs) => {
-        browser.tabs.sendMessage(tabs[0].id, {action: 'stop'});
+      // Kirim pesan ke semua tab Facebook
+      browser.tabs.query({url: "*://*.facebook.com/*"}).then((tabs) => {
+        tabs.forEach(tab => {
+          browser.tabs.sendMessage(tab.id, {action: 'stop'}).catch(() => {
+            // Ignore errors
+          });
+        });
       });
     });
   });

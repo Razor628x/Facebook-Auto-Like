@@ -1,11 +1,12 @@
 {
   "manifest_version": 2,
   "name": "Facebook Auto React",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Ekstensi untuk memberikan reaksi otomatis hanya ke postingan di Facebook",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "browser_action": {
     "default_popup": "popup.html",
@@ -14,7 +15,8 @@
   "content_scripts": [
     {
       "matches": ["*://*.facebook.com/*"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle"
     }
   ]
 }

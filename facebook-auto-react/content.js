@@ -1,13 +1,14 @@
 let isRunning = false;
 let reactionInterval;
 let selectedReaction = 'like';
-let processedPosts = new Set();
+let processedPosts = new Set(); // Menyimpan identifier unik untuk postingan yang sudah diproses/di-like
 
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'start') {
     isRunning = true;
-    selectedReaction = message.reaction;
-    processedPosts.clear();
+    selectedReaction = message.reaction || 'like';
+    // Tidak perlu clear processedPosts saat start, biarkan terus menumpuk selama sesi berjalan
+    // processedPosts.clear(); 
     startAutoReact();
   } else if (message.action === 'stop') {
     isRunning = false;
@@ -19,8 +20,10 @@ function startAutoReact() {
   if (reactionInterval) {
     clearInterval(reactionInterval);
   }
-  reactionInterval = setInterval(autoReactToPosts, 10000);
-  setTimeout(autoReactToPosts, 1000);
+  // Gunakan interval yang lebih pendek untuk menangkap konten baru lebih cepat
+  reactionInterval = setInterval(autoReactToPosts, 10000); // Kurangi menjadi 3 detik
+  // Jalankan sekali segera setelah start
+  setTimeout(autoReactToPosts, 500);
 }
 
 function stopAutoReact() {
@@ -28,106 +31,144 @@ function stopAutoReact() {
     clearInterval(reactionInterval);
     reactionInterval = null;
   }
-  processedPosts.clear();
+  // Jangan clear processedPosts saat stop, biarkan state-nya tetap
+  // processedPosts.clear();
 }
 
 function autoReactToPosts() {
   if (!isRunning) return;
-  
+
   try {
-    // Selector untuk tombol reaksi
-    const selectors = {
-      'like': '[aria-label="Like"]',
-      'love': '[aria-label="Love"]',
-      'haha': '[aria-label="Haha"]',
-      'wow': '[aria-label="Wow"]',
-      'sad': '[aria-label="Sad"]',
-      'angry': '[aria-label="Angry"]'
-    };
-    
-    const selector = selectors[selectedReaction] || '[aria-label="Like"]';
-    const allButtons = Array.from(document.querySelectorAll(selector));
-    
-    // Filter tombol yang belum diproses dan merupakan postingan
-    const validButtons = allButtons.filter(button => {
-      const rect = button.getBoundingClientRect();
-      const identifier = `${Math.round(rect.top)}-${Math.round(rect.left)}`;
-      return !processedPosts.has(identifier) && isPostButton(button);
-    });
-    
-    // Jika tidak ada tombol valid, gunakan semua tombol (reset)
-    let buttonsToProcess = validButtons;
-    if (validButtons.length === 0 && allButtons.length > 0) {
-      processedPosts.clear();
-      buttonsToProcess = allButtons.filter(button => isPostButton(button));
-    }
-    
-    // Batasi hanya 4 tombol pertama
-    const limitedButtons = buttonsToProcess.slice(0, 4);
-    
-    if (limitedButtons.length > 0) {
-      // Pilih tombol secara acak
-      const randomIndex = Math.floor(Math.random() * limitedButtons.length);
-      const button = limitedButtons[randomIndex];
+    // Selector spesifik untuk tombol "Like" pada postingan berdasarkan struktur yang diberikan
+    // Target: div dengan aria-label="Like" yang berada di dalam container postingan
+    const likeButtons = Array.from(document.querySelectorAll('div[aria-label="Like"]'));
+
+    // Filter tombol yang valid (postingan, belum diproses, belum di-like)
+    const validButtons = [];
+
+    for (const button of likeButtons) {
+      // --- Validasi 1: Apakah tombol ini bagian dari sebuah POSTINGAN? ---
+      // Cari container postingan terdekat. Umumnya memiliki role="article" atau atribut data unik feed.
+      const postContainer = button.closest('[role="article"], [data-sigil*="feed-story"], [data-pagelet^="Feed"], [aria-posinset]');
       
-      if (button) {
-        // Tandai sebagai diproses
-        const rect = button.getBoundingClientRect();
-        const identifier = `${Math.round(rect.top)}-${Math.round(rect.left)}`;
-        processedPosts.add(identifier);
+      // Jika tidak ditemukan container postingan, kemungkinan besar ini komentar atau UI lain.
+      if (!postContainer) {
+        continue; // Lewati tombol ini
+      }
+
+      // --- Validasi 2: Apakah tombol ini sudah BERUBAH dari "Like" menjadi reaksi lain (misalnya "Liked")? ---
+      // Jika tombol sudah di-klik, teks atau struktur internalnya biasanya berubah.
+      // Misalnya, bisa dicek apakah ada span dengan teks "Liked" atau perubahan atribut.
+      // Atau, bisa dicek berdasarkan identifier unik postingan itu sendiri (lebih robust).
+      
+      // Cara yang lebih robust: Gunakan identifier unik dari postingan itu sendiri
+      const postId = getPostId(postContainer);
+      if (postId && processedPosts.has(postId)) {
+         // console.log(`Post ${postId} sudah diproses.`);
+         continue; // Lewati jika sudah diproses
+      }
+
+      // --- Validasi 3: Apakah tombol ini sudah diproses dalam sesi ini? ---
+      // Gunakan kombinasi posisi dan konteks untuk membuat identifier yang unik untuk tombol ini
+      // (meskipun sebenarnya postId lebih baik, ini sebagai cadangan)
+      const rect = button.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue; // Lewati jika tidak terlihat
+      
+      const buttonIdentifier = `${Math.round(rect.top)}-${Math.round(rect.left)}-${postContainer.tagName}-${postContainer.children.length}`;
+      if (processedPosts.has(buttonIdentifier)) {
+          // console.log(`Button ${buttonIdentifier} sudah diproses.`); 
+          continue; // Lewati jika sudah diproses
+      }
+
+      // Jika semua validasi lolos, tambahkan ke daftar valid
+      validButtons.push({ button, postContainer, postId, buttonIdentifier });
+    }
+
+    if (validButtons.length > 0) {
+      // Pilih satu tombol secara acak dari daftar yang valid
+      const randomIndex = Math.floor(Math.random() * validButtons.length);
+      const { button, postContainer, postId, buttonIdentifier } = validButtons[randomIndex];
+
+      if (button && typeof button.click === 'function') {
+        // Simpan identifier untuk mencegah pemrosesan ulang
+        if (postId) {
+            processedPosts.add(postId); // Utamakan postId
+        } else {
+            processedPosts.add(buttonIdentifier); // Cadangan
+        }
         
         // Dapatkan posisi untuk scroll
+        const rect = button.getBoundingClientRect();
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const targetY = rect.top + scrollTop - 100;
-        
+        const targetY = rect.top + scrollTop - 150; // Scroll sedikit di atas tombol
+
         // Klik tombol reaksi
         button.click();
-        console.log(`Auto reacted with ${selectedReaction}`);
-        
-        // Scroll dan tambahkan efek visual
+        console.log(`✅ Auto reacted with ${selectedReaction} on a post. (Post ID: ${postId || 'N/A'})`);
+
+        // Scroll ke posisi postingan
         setTimeout(() => {
-          // Scroll ke posisi
           window.scrollTo({
             top: targetY,
             behavior: 'smooth'
-          });
-          
-          // Tambahkan efek visual sederhana
+        });
+        }, 300); // Tunggu sebentar setelah klik
+
+        // Tambahkan efek visual sederhana
+        setTimeout(() => {
           addSimpleHighlight(button);
-          
-        }, 500);
+        }, 800);
+        
       }
+    } else {
+        // console.log("Tidak ada tombol 'Like' pada postingan yang valid ditemukan.");
     }
   } catch (error) {
-    console.log('Error:', error);
+    console.error('Error in autoReactToPosts:', error);
   }
 }
 
-function isPostButton(button) {
+// Fungsi untuk mencoba mendapatkan ID unik dari sebuah postingan
+function getPostId(postContainerElement) {
   try {
-    // Hindari tombol komentar dengan mencari container komentar
-    const commentContainer = button.closest('[data-sigil*="comment"]');
-    if (commentContainer) {
-      return false;
-    }
-    
-    // Cek apakah ini tombol postingan berdasarkan posisi
-    const rect = button.getBoundingClientRect();
-    
-    // Tombol komentar biasanya berada di posisi yang lebih tinggi dan dekat dengan bagian atas
-    if (rect.top < 200) {
-      return false; // Kemungkinan besar komentar
-    }
-    
-    return true;
-  } catch (error) {
-    return true;
+     // Metode 1: Coba cari atribut data yang unik untuk postingan
+     // Ini sangat tergantung pada struktur DOM Facebook saat ini
+     let postId = postContainerElement.getAttribute('data-store')?.match(/"post_id":"(\d+)"/)?.[1];
+     if (postId) return `post_${postId}`;
+
+     postId = postContainerElement.getAttribute('id')?.match(/^(.*)$/)?.[1]; // Contoh jika ada ID
+     if (postId) return postId;
+
+     // Metode 2: Gunakan kombinasi atribut unik jika tidak ada ID jelas
+     const timestamp = postContainerElement.getAttribute('data-timestamp');
+     const permalink = postContainerElement.querySelector('a[href*="permalink"]')?.href;
+     if (timestamp && permalink) {
+        // Buat hash sederhana dari permalink dan timestamp
+        return `hash_${simpleHash(permalink + timestamp)}`;
+     }
+
+     // Jika tidak bisa, kembalikan null
+     return null;
+  } catch (e) {
+     console.warn("Could not determine post ID:", e);
+     return null;
   }
 }
+
+// Fungsi hash sederhana untuk membuat identifier unik
+function simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36); // Convert to base36 string
+}
+
 
 function addSimpleHighlight(button) {
   try {
-    // Buat elemen highlight sederhana
     const highlight = document.createElement('div');
     highlight.style.position = 'fixed';
     highlight.style.top = '20px';
@@ -137,53 +178,59 @@ function addSimpleHighlight(button) {
     highlight.style.color = 'white';
     highlight.style.padding = '10px 20px';
     highlight.style.borderRadius = '20px';
-    highlight.style.zIndex = '9999';
+    highlight.style.zIndex = '10000'; // Pastikan di atas elemen lain
     highlight.style.fontFamily = 'Arial, sans-serif';
     highlight.style.fontSize = '14px';
     highlight.style.fontWeight = 'bold';
     highlight.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+    highlight.style.opacity = '0';
+    highlight.style.transition = 'opacity 0.3s ease-in-out';
     highlight.textContent = `✅ Reaksi ${selectedReaction} berhasil!`;
-    
-    // Tambahkan ke body
+
     document.body.appendChild(highlight);
+
+    // Fade in
+    setTimeout(() => { highlight.style.opacity = '1'; }, 10);
     
-    // Hapus setelah 3 detik
+    // Fade out and remove
     setTimeout(() => {
-      if (highlight.parentNode) {
-        highlight.parentNode.removeChild(highlight);
-      }
-    }, 3000);
-    
-    // Scroll ke posisi tombol yang diklik
-    const rect = button.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const targetY = rect.top + scrollTop - 200;
-    
-    setTimeout(() => {
-      window.scrollTo({
-        top: targetY,
-        behavior: 'smooth'
-      });
-    }, 1000);
-    
+      highlight.style.opacity = '0';
+      setTimeout(() => {
+        if (highlight.parentNode) {
+          highlight.parentNode.removeChild(highlight);
+        }
+      }, 300);
+    }, 2700); // Tampil selama ~3 detik
+
   } catch (error) {
-    console.log('Error adding highlight:', error);
+    console.error('Error adding highlight:', error);
   }
 }
 
-// Cleanup processed posts setiap 30 detik
+// Cleanup processed posts setiap beberapa menit untuk mencegah memory leak
+// Tapi jangan terlalu sering agar tidak mereset status 'sudah di-like'
 setInterval(() => {
-  if (processedPosts.size > 30) {
-    processedPosts.clear();
+  const maxSize = 200; // Batasi ukuran Set
+  if (processedPosts.size > maxSize) {
+    // Hapus sebagian awal (FIFO-like behavior)
+    const keysToDelete = Array.from(processedPosts.keys()).slice(0, 50);
+    keysToDelete.forEach(key => processedPosts.delete(key));
+    console.log(`🧹 Cleaned up processedPosts cache. New size: ${processedPosts.size}`);
   }
-}, 30000);
+}, 60000); // Setiap 1 menit
 
-// Load initial state
+// Muat state awal dari storage
 browser.storage.local.get(['isRunning', 'reactionType']).then((result) => {
   if (result.isRunning) {
     isRunning = true;
     selectedReaction = result.reactionType || 'like';
+    console.log("🔄 Content script loaded, resuming auto-react state.");
+    startAutoReact(); // Mulai otomatis jika sebelumnya running
   }
 });
 
-window.addEventListener('beforeunload', stopAutoReact);
+// Bersihkan saat tab ditutup/unload
+window.addEventListener('beforeunload', () => {
+    stopAutoReact();
+    console.log("🛑 Auto-react stopped on page unload.");
+});
