@@ -2,9 +2,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
   const statusDiv = document.getElementById('status');
-  const reactionType = document.getElementById('reactionType');
 
-  // Load saved settings
+  // Load saved settings (tetap menyimpan reactionType untuk kompatibilitas)
   browser.storage.local.get(['isRunning', 'reactionType']).then((result) => {
     if (result.isRunning) {
       statusDiv.textContent = 'Status: Running';
@@ -13,14 +12,11 @@ document.addEventListener('DOMContentLoaded', function() {
       statusDiv.textContent = 'Status: Stopped';
       statusDiv.className = 'stopped';
     }
-    
-    if (result.reactionType) {
-      reactionType.value = result.reactionType;
-    }
   });
 
   startBtn.addEventListener('click', function() {
-    const selectedReaction = reactionType.value;
+    // Set default reaction to 'like'
+    const selectedReaction = 'like';
     
     browser.storage.local.set({
       isRunning: true,
