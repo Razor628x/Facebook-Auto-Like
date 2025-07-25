@@ -61,4 +61,3 @@ This extension is for educational purposes only. Use at your own risk. The devel
 ## Repository
 
 [https://github.com/Razor628x/Facebook-Auto-Like](https://github.com/Razor628x/Facebook-Auto-Like)
-```
